@@ -1,0 +1,127 @@
+import { useState, useEffect } from "react";
+import Header, { type ViewName } from "./components/Header";
+import HomeView from "./components/HomeView";
+import CategoryView from "./components/CategoryView";
+import SearchView from "./components/SearchView";
+import SalesView from "./components/SalesView";
+import CompareView from "./components/CompareView";
+import WishlistView from "./components/WishlistView";
+import GameModal from "./components/GameModal";
+import RandomGameModal from "./components/RandomGameModal";
+import AuthModal from "./components/AuthModal";
+import ScrollToTop from "./components/ScrollToTop";
+import Footer from "./components/Footer";
+import { useCompare } from "./hooks/useCompare";
+import { useWishlist } from "./hooks/useWishlist";
+import { useAuth } from "./hooks/useAuth";
+
+type AppView =
+  | { name: "home" }
+  | { name: "category"; categoryId: string }
+  | { name: "search"; term: string }
+  | { name: "sales" }
+  | { name: "compare" }
+  | { name: "wishlist" };
+
+export default function App() {
+  const [view, setView] = useState<AppView>({ name: "home" });
+  const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
+  const [isRouletteOpen, setIsRouletteOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+  const auth = useAuth();
+  const compare = useCompare();
+  const { wishlist, toggleWishlist, isWishlisted, clearWishlist } = useWishlist();
+
+  // Synchronisation automatique de la Wishlist avec le compte utilisateur
+  useEffect(() => {
+    if (auth.currentUser) {
+      auth.syncWishlist(wishlist);
+    }
+  }, [wishlist, auth.currentUser]);
+
+  function navigate(name: ViewName) {
+    if (name === "category") return;
+    setView({ name } as AppView);
+  }
+
+  const activeNav: ViewName =
+    view.name === "category" || view.name === "search" ? "home" : (view.name as ViewName);
+
+  return (
+    <div className="min-h-screen bg-[#0b0f16] text-slate-100">
+      <Header
+        active={activeNav}
+        compareCount={compare.list.length}
+        wishlistCount={wishlist.length}
+        currentUser={auth.currentUser}
+        onNavigate={navigate}
+        onSearch={(term) => setView({ name: "search", term })}
+        onOpenRoulette={() => setIsRouletteOpen(true)}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        onLogout={auth.logout}
+        initialTerm={view.name === "search" ? view.term : ""}
+      />
+
+      <main>
+                {view.name === "home" && (
+          <HomeView
+            onOpen={setSelectedAppId}
+            onSelectCategory={(categoryId) => setView({ name: "category", categoryId })}
+            onSearch={(term) => setView({ name: "search", term })}
+            onNavigateSales={() => setView({ name: "sales" })}
+            onOpenRoulette={() => setIsRouletteOpen(true)}
+            compare={compare}
+          />
+        )}
+
+        {view.name === "category" && (
+          <CategoryView
+            categoryId={view.categoryId}
+            onOpen={setSelectedAppId}
+            compare={compare}
+            onBack={() => setView({ name: "home" })}
+          />
+        )}
+
+        {view.name === "search" && <SearchView term={view.term} onOpen={setSelectedAppId} compare={compare} />}
+
+        {view.name === "sales" && <SalesView onOpen={setSelectedAppId} compare={compare} />}
+
+        {view.name === "compare" && <CompareView compare={compare} onOpen={setSelectedAppId} />}
+
+        {view.name === "wishlist" && (
+          <WishlistView
+            wishlist={wishlist}
+            onToggleWishlist={toggleWishlist}
+            onClearWishlist={clearWishlist}
+            onOpen={setSelectedAppId}
+            compare={compare}
+            onBack={() => setView({ name: "home" })}
+          />
+        )}
+      </main>
+
+      <Footer />
+      <ScrollToTop />
+
+      {/* MODALE D'UN JEU */}
+      {selectedAppId !== null && (
+        <GameModal appid={selectedAppId} onClose={() => setSelectedAppId(null)} compare={compare} />
+      )}
+
+      {/* MODALE ROULETTE */}
+      <RandomGameModal
+        isOpen={isRouletteOpen}
+        onClose={() => setIsRouletteOpen(false)}
+        onSelectGame={(appid) => {
+          setIsRouletteOpen(false);
+          setSelectedAppId(appid);
+        }}
+      />
+
+      {/* MODALE AUTHENTIFICATION + CAPTCHA + EMAIL */}
+      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} auth={auth} />
+    </div>
+  );
+}
